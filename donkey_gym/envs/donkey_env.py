@@ -12,7 +12,7 @@ import numpy as np
 import gym
 from gym import error, spaces, utils
 from gym.utils import seeding
-from donkey_gym.envs.donkey_sim import DonkeyUnitySimContoller
+from donkey_gym.envs.donkey_sim_controller import DonkeyUnitySimContoller
 from donkey_gym.envs.donkey_proc import DonkeyUnityProcess
 from donkey_gym.envs.donkey_ex import SimFailed
 
@@ -32,7 +32,7 @@ class DonkeyEnv(gym.Env):
     THROTTLE_MAX = 5.0
     VAL_PER_PIXEL = 255
 
-    def __init__(self, level, time_step=0.05, frame_skip=2):
+    def __init__(self, level, frame_skip=2):
 
         print("starting DonkeyGym env")
         
@@ -69,14 +69,14 @@ class DonkeyEnv(gym.Env):
         self.proc.start(exe_path, headless=headless, port=port)
 
         # start simulation com
-        self.viewer = DonkeyUnitySimContoller(level=level, time_step=time_step, port=port)
+        self.simulator = DonkeyUnitySimContoller(level=level, port=port)
         
         # steering and throttle
         self.action_space = spaces.Box(low=np.array([self.STEER_LIMIT_LEFT, self.THROTTLE_MIN]),
             high=np.array([self.STEER_LIMIT_RIGHT, self.THROTTLE_MAX]), dtype=np.float32 )
 
         # camera sensor data
-        self.observation_space = spaces.Box(0, self.VAL_PER_PIXEL, self.viewer.get_sensor_size(), dtype=np.uint8)
+        self.observation_space = spaces.Box(0, self.VAL_PER_PIXEL, self.simulator.get_sensor_resolution(), dtype=np.uint8)
 
         # simulation related variables.
         self.seed()
@@ -85,13 +85,7 @@ class DonkeyEnv(gym.Env):
         self.frame_skip = frame_skip
 
         # wait until loaded
-        self.viewer.wait_until_loaded()
-
-    def __del__(self):
-        self.close()
-
-    def close(self):
-        self.proc.quit()
+        self.simulator.wait_until_loaded()
 
     def seed(self, seed=None):
         self.np_random, seed = seeding.np_random(seed)
@@ -99,24 +93,28 @@ class DonkeyEnv(gym.Env):
 
     def step(self, action):
         for i in range(self.frame_skip):
-            self.viewer.take_action(action)
-            observation, reward, done, info = self.viewer.observe()
+            self.simulator.take_action(action)
+            observation, reward, done, info = self.simulator.observe()
         return observation, reward, done, info
 
-    def reset(self):
-        self.viewer.reset()
-        observation, reward, done, info = self.viewer.observe()
+    def reset(self, reset_scene_to=None):
+        self.simulator.reset(reset_scene_to)
+        observation, reward, done, info = self.simulator.observe()
         time.sleep(1)
         return observation
 
     def render(self, mode="human", close=False):
-        if close:
-            self.viewer.quit()
+        pass
 
-        return self.viewer.render(mode)
+    # def regen_road(self, road_style, rand_seed, turn_increment):
+    #     self.simulator.regen_road(road_style, rand_seed, turn_increment)
 
-    def is_game_over(self):
-        return self.viewer.is_game_over()
+    def __del__(self):
+        self.close()
+
+    def close(self):
+        self.proc.quit()
+
 
 
 ## ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ ##
